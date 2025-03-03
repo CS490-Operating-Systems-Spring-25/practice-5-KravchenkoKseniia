@@ -1,0 +1,476 @@
+write "Operation register:" to INFO_REG_OP
+write "A register:" to INFO_REG_A
+write "B register:" to INFO_REG_B
+write "C register:" to INFO_REG_C
+write "D register:" to INFO_REG_D
+write "Result register:" to INFO_REG_RES
+write "Comparison result register:" to INFO_REG_BOOL_RES
+write "Error register:" to INFO_REG_ERROR
+write "Display buffer:" to INFO_DISPLAY_BUFFER
+write "Display color:" to INFO_DISPLAY_COLOR
+write "Keyboard buffer:" to INFO_KEYBOARD_BUFFER
+write "Display background:" to INFO_DISPLAY_BACKGROUND
+write "Program counter:" to INFO_PROGRAM_COUNTER
+write "Free memory start:" to INFO_FREE_MEMORY_START
+write "Free memory end:" to INFO_FREE_MEMORY_END
+write "Free chunks:" to INFO_FREE_CHUNKS
+write "" to FREE_CHUNKS
+
+// Print welcome message
+write "Applejack Program - done." to DISPLAY_BUFFER
+write COLOR_GREEN to DISPLAY_COLOR
+write OP_DISPLAY_LN to REG_OP
+cpu_exec
+
+// Define a bitmap
+// "cccccccccccccc"
+// "cccccccccccccc"
+// "cccccccccccccc"
+// "cccccccccccccc"
+// "cccccrrccccccc"
+// "cccyyyrrcccccc"
+// "ccyyyymrrccccc"
+// "cyymmmmrrccccc"
+// "ccmbmmyrrccccc"
+// "cmmbmmyrcccccc"
+// "cmmmmyyccyyccc"
+// "ccccrymmyyyycc"
+// "ccccymmrmcyycc"
+// "ccccmmmmmccryc"
+// "ccccmmcmmccyyc"
+// "cccccccccccccc"
+// "cccccccccccccc"
+// "cccccccccccccc"
+// "cccccccccccccc"
+
+//DEBUG_OFF
+
+    // Add some prompt for the user:
+    write "Press Enter a to move left, d to move right and q to exit" to DISPLAY_BUFFER
+    write COLOR_GREEN to DISPLAY_COLOR
+    write OP_DISPLAY_LN to REG_OP
+    cpu_exec
+
+    // Let's set background color to cyan:
+    write COLOR_CYAN to DISPLAY_BACKGROUND
+    write OP_SET_BACKGROUND_COLOR to REG_OP
+    cpu_exec
+
+    var startOfOriginalBitmap
+    copy FREE_MEMORY_START to var:startOfOriginalBitmap
+
+    var endOfOriginalBitmap
+    copy FREE_MEMORY_START to var:endOfOriginalBitmap
+
+    var startOfModifiedBitmap
+    var endOfModifiedBitmap
+
+    var endOfModifiedBitmapIncr
+
+    var bitmapLength
+    write 14 to var:bitmapLength
+
+    var currentLength
+
+    var restoreIndex
+
+    var missingSym
+
+    var counter
+    var counterOrig
+    copy FREE_MEMORY_START to var:counterOrig 
+
+//save original bitmap to free memory
+label write_original_bitmap
+    write "cccccccccccccc" to *var:startOfOriginalBitmap
+    copy var:startOfOriginalBitmap to REG_A
+    write OP_INCR to REG_OP
+    cpu_exec
+    copy REG_RES to var:startOfOriginalBitmap
+
+    write "cccccccccccccc" to *var:startOfOriginalBitmap
+    copy var:startOfOriginalBitmap to REG_A
+    write OP_INCR to REG_OP
+    cpu_exec
+    copy REG_RES to var:startOfOriginalBitmap
+
+    write "cccccccccccccc" to *var:startOfOriginalBitmap
+    copy var:startOfOriginalBitmap to REG_A
+    write OP_INCR to REG_OP
+    cpu_exec
+    copy REG_RES to var:startOfOriginalBitmap
+
+    write "cccccccccccccc" to *var:startOfOriginalBitmap
+    copy var:startOfOriginalBitmap to REG_A
+    write OP_INCR to REG_OP
+    cpu_exec
+    copy REG_RES to var:startOfOriginalBitmap
+
+    write "cccccrrccccccc" to *var:startOfOriginalBitmap
+    copy var:startOfOriginalBitmap to REG_A
+    write OP_INCR to REG_OP
+    cpu_exec
+    copy REG_RES to var:startOfOriginalBitmap
+
+    write "cccyyyrrcccccc" to *var:startOfOriginalBitmap
+    copy var:startOfOriginalBitmap to REG_A
+    write OP_INCR to REG_OP
+    cpu_exec
+    copy REG_RES to var:startOfOriginalBitmap
+
+    write "ccyyyymrrccccc" to *var:startOfOriginalBitmap
+    copy var:startOfOriginalBitmap to REG_A
+    write OP_INCR to REG_OP
+    cpu_exec
+    copy REG_RES to var:startOfOriginalBitmap
+
+    write "cyymmmmrrccccc" to *var:startOfOriginalBitmap
+    copy var:startOfOriginalBitmap to REG_A
+    write OP_INCR to REG_OP
+    cpu_exec
+    copy REG_RES to var:startOfOriginalBitmap
+
+    write "ccmbmmyrrccccc" to *var:startOfOriginalBitmap
+    copy var:startOfOriginalBitmap to REG_A
+    write OP_INCR to REG_OP
+    cpu_exec
+    copy REG_RES to var:startOfOriginalBitmap
+
+    write "cmmbmmyrcccccc" to *var:startOfOriginalBitmap
+    copy var:startOfOriginalBitmap to REG_A
+    write OP_INCR to REG_OP
+    cpu_exec
+    copy REG_RES to var:startOfOriginalBitmap
+
+    write "cmmmmyyccyyccc" to *var:startOfOriginalBitmap
+    copy var:startOfOriginalBitmap to REG_A
+    write OP_INCR to REG_OP
+    cpu_exec
+    copy REG_RES to var:startOfOriginalBitmap
+
+    write "ccccrymmyyyycc" to *var:startOfOriginalBitmap
+    copy var:startOfOriginalBitmap to REG_A
+    write OP_INCR to REG_OP
+    cpu_exec
+    copy REG_RES to var:startOfOriginalBitmap
+
+    write "ccccymmrmcyycc" to *var:startOfOriginalBitmap
+    copy var:startOfOriginalBitmap to REG_A
+    write OP_INCR to REG_OP
+    cpu_exec
+    copy REG_RES to var:startOfOriginalBitmap
+
+    write "ccccmmmmmccryc" to *var:startOfOriginalBitmap
+    copy var:startOfOriginalBitmap to REG_A
+    write OP_INCR to REG_OP
+    cpu_exec
+    copy REG_RES to var:startOfOriginalBitmap
+
+    write "ccccmmcmmccyyc" to *var:startOfOriginalBitmap
+    copy var:startOfOriginalBitmap to REG_A
+    write OP_INCR to REG_OP
+    cpu_exec
+    copy REG_RES to var:startOfOriginalBitmap
+
+    write "cccccccccccccc" to *var:startOfOriginalBitmap
+    copy var:startOfOriginalBitmap to REG_A
+    write OP_INCR to REG_OP
+    cpu_exec
+    copy REG_RES to var:startOfOriginalBitmap
+
+    write "cccccccccccccc" to *var:startOfOriginalBitmap
+    copy var:startOfOriginalBitmap to REG_A
+    write OP_INCR to REG_OP
+    cpu_exec
+    copy REG_RES to var:startOfOriginalBitmap
+
+    write "cccccccccccccc" to *var:startOfOriginalBitmap
+    copy var:startOfOriginalBitmap to REG_A
+    write OP_INCR to REG_OP
+    cpu_exec
+    copy REG_RES to var:startOfOriginalBitmap
+
+    write "cccccccccccccc" to *var:startOfOriginalBitmap
+    
+    copy var:startOfOriginalBitmap to var:endOfOriginalBitmap
+    copy FREE_MEMORY_START to var:startOfOriginalBitmap
+label write_modified_bitmap
+    copy var:endOfOriginalBitmap to REG_A
+    write OP_INCR to REG_OP
+    cpu_exec
+
+    copy REG_RES to var:startOfModifiedBitmap
+    copy REG_RES to var:endOfModifiedBitmap
+
+    write "cccccccccccccc" to *var:startOfModifiedBitmap
+    copy var:startOfModifiedBitmap to REG_A
+    write OP_INCR to REG_OP
+    cpu_exec
+    copy REG_RES to var:startOfModifiedBitmap
+
+    write "cccccccccccccc" to *var:startOfModifiedBitmap
+    copy var:startOfModifiedBitmap to REG_A
+    write OP_INCR to REG_OP
+    cpu_exec
+    copy REG_RES to var:startOfModifiedBitmap
+
+    write "cccccccccccccc" to *var:startOfModifiedBitmap
+    copy var:startOfModifiedBitmap to REG_A
+    write OP_INCR to REG_OP
+    cpu_exec
+    copy REG_RES to var:startOfModifiedBitmap
+
+    write "cccccccccccccc" to *var:startOfModifiedBitmap
+    copy var:startOfModifiedBitmap to REG_A
+    write OP_INCR to REG_OP
+    cpu_exec
+    copy REG_RES to var:startOfModifiedBitmap
+
+    write "cccccrrccccccc" to *var:startOfModifiedBitmap
+    copy var:startOfModifiedBitmap to REG_A
+    write OP_INCR to REG_OP
+    cpu_exec
+    copy REG_RES to var:startOfModifiedBitmap
+
+    write "cccyyyrrcccccc" to *var:startOfModifiedBitmap
+    copy var:startOfModifiedBitmap to REG_A
+    write OP_INCR to REG_OP
+    cpu_exec
+    copy REG_RES to var:startOfModifiedBitmap
+
+    write "ccyyyymrrccccc" to *var:startOfModifiedBitmap
+    copy var:startOfModifiedBitmap to REG_A
+    write OP_INCR to REG_OP
+    cpu_exec
+    copy REG_RES to var:startOfModifiedBitmap
+
+    write "cyymmmmrrccccc" to *var:startOfModifiedBitmap
+    copy var:startOfModifiedBitmap to REG_A
+    write OP_INCR to REG_OP
+    cpu_exec
+    copy REG_RES to var:startOfModifiedBitmap
+
+    write "ccmbmmyrrccccc" to *var:startOfModifiedBitmap
+    copy var:startOfModifiedBitmap to REG_A
+    write OP_INCR to REG_OP
+    cpu_exec
+    copy REG_RES to var:startOfModifiedBitmap
+
+    write "cmmbmmyrcccccc" to *var:startOfModifiedBitmap
+    copy var:startOfModifiedBitmap to REG_A
+    write OP_INCR to REG_OP
+    cpu_exec
+    copy REG_RES to var:startOfModifiedBitmap
+
+    write "cmmmmyyccyyccc" to *var:startOfModifiedBitmap
+    copy var:startOfModifiedBitmap to REG_A
+    write OP_INCR to REG_OP
+    cpu_exec
+    copy REG_RES to var:startOfModifiedBitmap
+
+    write "ccccrymmyyyycc" to *var:startOfModifiedBitmap
+    copy var:startOfModifiedBitmap to REG_A
+    write OP_INCR to REG_OP
+    cpu_exec
+    copy REG_RES to var:startOfModifiedBitmap
+
+    write "ccccymmrmcyycc" to *var:startOfModifiedBitmap
+    copy var:startOfModifiedBitmap to REG_A
+    write OP_INCR to REG_OP
+    cpu_exec
+    copy REG_RES to var:startOfModifiedBitmap
+
+    write "ccccmmmmmccryc" to *var:startOfModifiedBitmap
+    copy var:startOfModifiedBitmap to REG_A
+    write OP_INCR to REG_OP
+    cpu_exec
+    copy REG_RES to var:startOfModifiedBitmap
+
+    write "ccccmmcmmccyyc" to *var:startOfModifiedBitmap
+    copy var:startOfModifiedBitmap to REG_A
+    write OP_INCR to REG_OP
+    cpu_exec
+    copy REG_RES to var:startOfModifiedBitmap
+
+    write "cccccccccccccc" to *var:startOfModifiedBitmap
+    copy var:startOfModifiedBitmap to REG_A
+    write OP_INCR to REG_OP
+    cpu_exec
+    copy REG_RES to var:startOfModifiedBitmap
+
+    write "cccccccccccccc" to *var:startOfModifiedBitmap
+    copy var:startOfModifiedBitmap to REG_A
+    write OP_INCR to REG_OP
+    cpu_exec
+    copy REG_RES to var:startOfModifiedBitmap
+
+    write "cccccccccccccc" to *var:startOfModifiedBitmap
+    copy var:startOfModifiedBitmap to REG_A
+    write OP_INCR to REG_OP
+    cpu_exec
+    copy REG_RES to var:startOfModifiedBitmap
+
+    write "cccccccccccccc" to *var:startOfModifiedBitmap
+    
+    copy var:endOfModifiedBitmap to REG_D
+    copy var:startOfModifiedBitmap to var:endOfModifiedBitmap
+    copy REG_D to var:startOfModifiedBitmap
+    copy var:startOfModifiedBitmap to var:counter
+
+    copy var:endOfModifiedBitmap to var:endOfModifiedBitmapIncr
+    copy var:endOfModifiedBitmapIncr to REG_A
+    write OP_INCR to REG_OP
+    cpu_exec
+
+    copy REG_RES to var:endOfModifiedBitmapIncr
+    copy var:startOfModifiedBitmap to var:counter
+
+label read_key
+    copy var:startOfModifiedBitmap to REG_A
+    copy var:endOfModifiedBitmapIncr to REG_B
+    write OP_RENDER_BITMAP to REG_OP
+    cpu_exec
+
+    write KEYBOARD_READ_CHAR_SILENTLY to REG_A
+    write OP_READ_INPUT to REG_OP
+    cpu_exec
+    
+    copy KEYBOARD_BUFFER to REG_A
+    write "a" to REG_B
+    write OP_CMP_EQ to REG_OP
+    cpu_exec
+    
+    jump_if label:move_left
+    
+    write "d" to REG_B
+    cpu_exec
+    jump_if label:move_right
+
+    write "q" to REG_B
+    cpu_exec
+    
+    jump_if label:kernel_exit
+    jump label:read_key
+
+label move_left
+
+    copy var:startOfModifiedBitmap to var:counter
+
+    label modifyBitMapLeft
+        //check if counter <= endOfTheModifiedBitMap
+        copy var:counter to REG_A
+        copy var:endOfModifiedBitmap to REG_B
+        write OP_CMP_LE to REG_OP
+        cpu_exec
+        jump_if_not label:render_left
+
+        copy *var:counter to REG_A
+        write 1 to REG_B
+        write "" to REG_C
+        write "" to REG_D
+        write OP_REPLACE_COLUMN to REG_OP
+        cpu_exec
+
+        copy REG_RES to *var:counter
+
+        copy var:counter to REG_A
+        write OP_INCR to REG_OP
+        cpu_exec
+        copy REG_RES to var:counter
+
+        jump label:modifyBitMapLeft
+    label render_left
+        copy var:startOfModifiedBitmap to REG_A
+        copy var:endOfModifiedBitmapIncr to REG_B
+        write OP_RENDER_BITMAP to REG_OP
+
+        cpu_exec
+
+        jump label:read_key
+label move_right
+    label modifyBitMap
+        //check if counter <= endOfTheModifiedBitMap
+        copy var:counter to REG_A
+        copy var:endOfModifiedBitmap to REG_B
+        write OP_CMP_LE to REG_OP
+        cpu_exec
+        jump_if_not label:render_right
+
+        //get length of modified bitmap row
+        copy *var:counter to REG_A
+        write OP_GET_LENGTH to REG_OP
+        cpu_exec
+        copy REG_RES to var:currentLength
+
+        // check if current row is shorter than original one
+        copy var:currentLength to REG_A
+        copy var:bitmapLength to REG_B
+        write OP_CMP_LT to REG_OP
+        cpu_exec
+        jump_if label:restore_bitmap // if true, than jump to resoring label
+
+        // if no - than just add "c"
+        write "c" to REG_A
+        copy *var:counter to REG_B
+        write "" to REG_C
+        write OP_CONCAT_WITH to REG_OP
+        cpu_exec
+
+        copy REG_RES to *var:counter
+
+        copy var:counter to REG_A
+        write OP_INCR to REG_OP
+        cpu_exec
+        copy REG_RES to var:counter
+
+        jump label:modifyBitMap
+    
+        label restore_bitmap
+            copy var:bitmapLength to REG_A
+            copy var:currentLength to REG_B
+            write OP_SUB to REG_OP
+            cpu_exec
+
+            copy REG_RES to var:restoreIndex //the number of column, where orig symbol is placed
+
+            copy *var:counterOrig to REG_A
+            copy var:restoreIndex to REG_B
+            write "" to REG_C
+            write OP_GET_COLUMN to REG_OP
+            cpu_exec
+
+            copy REG_RES to var:missingSym // get the symbol
+
+            copy var:missingSym to REG_A
+            copy *var:counter to REG_B
+            write "" to REG_C
+            write OP_CONCAT_WITH to REG_OP
+            cpu_exec
+
+            copy REG_RES to *var:counter
+
+
+            copy var:counterOrig to REG_A
+            write OP_INCR to REG_OP
+            cpu_exec
+            copy REG_RES to var:counterOrig
+
+            copy var:counter to REG_A
+            write OP_INCR to REG_OP
+            cpu_exec
+            copy REG_RES to var:counter
+
+            jump label:modifyBitMap
+
+    label render_right
+        copy var:startOfModifiedBitmap to REG_A
+        copy var:endOfModifiedBitmapIncr to REG_B
+        write OP_RENDER_BITMAP to REG_OP
+
+        copy var:startOfModifiedBitmap to var:counter
+        copy var:startOfOriginalBitmap to var:counterOrig
+        cpu_exec
+        jump label:read_key
+label kernel_exit
+    write OP_HALT to REG_OP
+    cpu_exec
