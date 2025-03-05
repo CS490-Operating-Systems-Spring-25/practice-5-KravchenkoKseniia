@@ -1,0 +1,890 @@
+// KaguOS kernel main code
+
+// ##########################################
+// # INITRAMFS_START                        #
+// ##########################################
+label kernel_entry_point
+
+//DEBUG_OFF
+
+write "Operation register:" to INFO_REG_OP
+write "A register:" to INFO_REG_A
+write "B register:" to INFO_REG_B
+write "C register:" to INFO_REG_C
+write "D register:" to INFO_REG_D
+write "Result register:" to INFO_REG_RES
+write "Comparison result register:" to INFO_REG_BOOL_RES
+write "Error register:" to INFO_REG_ERROR
+write "Display buffer:" to INFO_DISPLAY_BUFFER
+write "Display color:" to INFO_DISPLAY_COLOR
+write "Keyboard buffer:" to INFO_KEYBOARD_BUFFER
+write "Display background:" to INFO_DISPLAY_BACKGROUND
+write "Program counter:" to INFO_PROGRAM_COUNTER
+write "Free memory start:" to INFO_FREE_MEMORY_START
+write "Free memory end:" to INFO_FREE_MEMORY_END
+write "Free chunks:" to INFO_FREE_CHUNKS
+write "" to FREE_CHUNKS
+
+// Let's init pointer to the stack
+//      var:sys_stack_ptr = FREE_MEMORY_END + 1
+// Therefore on any push to stack we will decrement it
+// If sys_stack_pop will be called incorrectly then we will get crashed
+copy FREE_MEMORY_END to REG_A
+write OP_INCR to REG_OP
+cpu_exec
+copy REG_RES to var:sys_stack_ptr
+
+//Algorithm 
+// 1. Ask for disk name +
+// 2. Check if the disk name is correct +
+//  2.1. Validate partition table +
+// 3. Ask for partition name +
+// 4. Check whether the partition exists +
+// 5. Validate that the partition header conforms to the correct format
+//  5.1. The first line of the partition should have the following structure FS_HEADER kagu_fs FIRST_USABLE_BLOCK 30 LAST_USABLE_BLOCK 200.
+//  5.2. Validate that all words match the format, including the fact that block numbers are valid e.g. belong to partition.
+//  5.3. Check that file headers starting from the second line are either empty or follow 1.txt 7 7 7 user user BLOCKS 30 32 40 42 format.
+//       Column 2, 3 and 4 should be numbers from 0 to 7, after BLOCKS column we should have as much pairs of numbers.
+//       In each pair left value should be less or equal to the second one.
+//       FS_HEADER_END should be present somewhere before the first usable block.
+// 6. Display "Valid" if valid or "Not valid" if not.
+
+write "File System Validator Program" to DISPLAY_BUFFER
+write COLOR_MAGENTA to DISPLAY_COLOR
+write OP_DISPLAY_LN to REG_OP
+cpu_exec
+
+// VARIABLES //
+var counter
+write 1 to var:counter
+
+var diskName
+
+var partition_counter
+write 1 to var:partition_counter
+
+var names_counter
+copy FREE_MEMORY_START to var:names_counter
+
+var previous_end_block
+write 0 to var:previous_end_block
+
+var start_block
+var end_block
+
+var innerCounter
+var outerCounter
+copy FREE_MEMORY_START to var:outerCounter
+
+var partition_name
+var partition_start_block
+var partition_end_block
+
+var partition_first_line
+
+var return_res
+
+var first_usable_block
+var last_usable_block
+
+var end_header_block_address
+var header_counter
+var file_header
+
+var column_counter
+write 7 to var:column_counter
+
+var block_start
+var block_temp
+var block_prev
+///////////////
+
+// Display prompt to enter the disk name:
+write COLOR_YELLOW to DISPLAY_COLOR
+write "Please enter a disk name: " to DISPLAY_BUFFER
+write OP_DISPLAY to REG_OP
+cpu_exec
+
+// read disk name from keyboard
+write OP_READ_INPUT to REG_OP
+write KEYBOARD_READ_LINE to REG_A
+cpu_exec
+
+// check if user input for disk name is correct
+copy KEYBOARD_BUFFER to REG_A
+copy var:counter to REG_B
+write OP_READ_BLOCK to REG_OP
+cpu_exec
+jump_err label:error
+
+copy KEYBOARD_BUFFER to var:diskName
+cpu_exec
+
+label partition_table_validation
+    //check if 1 block is number (total disk size)
+    copy var:diskName to REG_A
+    write 1 to REG_B
+    write OP_READ_BLOCK to REG_OP
+    cpu_exec
+    jump_err label:error
+
+    copy REG_RES to REG_A
+    write OP_IS_NUM to REG_OP
+    cpu_exec
+    jump_if_not label:error
+
+    //check if block 2 contains the partition table start marker START_PARTITION_TABLE
+    copy var:diskName to REG_A
+    write 2 to REG_B
+    write OP_READ_BLOCK to REG_OP
+    cpu_exec
+    jump_err label:error
+
+    copy REG_RES to REG_A
+    write "START_PARTITION_TABLE" to REG_B
+    write OP_CONTAINS to REG_OP
+    cpu_exec
+    jump_if_not label:error
+
+    //check if Block 3 specifies the number of partitions on the disk: PARTITION_ENTRIES <number_of_partitions>
+    copy var:diskName to REG_A
+    write 3 to REG_B
+    write OP_READ_BLOCK to REG_OP
+    cpu_exec
+    jump_err label:error
+
+    copy REG_RES to REG_A
+    write 1 to REG_B
+    write " " to REG_C
+    write OP_GET_COLUMN to REG_OP
+    cpu_exec
+
+    copy REG_RES to REG_A
+    write "PARTITION_ENTRIES" to REG_B
+    write OP_CMP_EQ to REG_OP
+    cpu_exec
+    jump_if_not label:error
+
+    copy var:diskName to REG_A
+    write 3 to REG_B
+    write OP_READ_BLOCK to REG_OP
+    cpu_exec
+    jump_err label:error
+
+    copy REG_RES to REG_A
+    write 2 to REG_B
+    write " " to REG_C
+    write OP_GET_COLUMN to REG_OP
+    cpu_exec
+
+    copy REG_RES to REG_A
+    write OP_IS_NUM to REG_OP
+    cpu_exec
+    jump_if_not label:error
+
+    copy REG_A to var:partition_counter
+    write 3 to REG_B
+    write OP_ADD to REG_OP
+    cpu_exec
+
+    copy REG_RES to var:partition_counter
+
+    copy var:counter to REG_A
+    write 3 to REG_B
+    write OP_ADD to REG_OP
+    cpu_exec
+
+    copy REG_RES to var:counter
+
+label partition_validation_loop
+    // check if counter <= partition_counter
+    copy var:counter to REG_A
+    copy var:partition_counter to REG_B
+    write OP_CMP_LE to REG_OP
+    cpu_exec
+    jump_if_not label:names_validatition
+
+    //check that each partition is described in a separate block with the following format:
+    //NAME <partition_name> START_BLOCK <start_block> END_BLOCK <end_block>
+
+    // NAME
+    copy var:diskName to REG_A
+    copy var:counter to REG_B
+    write OP_READ_BLOCK to REG_OP
+    cpu_exec
+    jump_err label:error
+
+    copy REG_RES to REG_A
+    write 1 to REG_B
+    write " " to REG_C
+    write OP_GET_COLUMN to REG_OP
+    cpu_exec
+
+    copy REG_RES to REG_A
+    write "NAME" to REG_B
+    write OP_CMP_EQ to REG_OP
+    cpu_exec
+    jump_if_not label:error
+
+    //save names in free memory
+    copy var:diskName to REG_A
+    copy var:counter to REG_B
+    write OP_READ_BLOCK to REG_OP
+    cpu_exec
+    jump_err label:error
+
+    copy REG_RES to REG_A
+    write 2 to REG_B
+    write " " to REG_C
+    write OP_GET_COLUMN to REG_OP
+    cpu_exec
+
+    copy REG_RES to *var:names_counter
+
+    // START_BLOCK
+    copy var:diskName to REG_A
+    copy var:counter to REG_B
+    write OP_READ_BLOCK to REG_OP
+    cpu_exec
+    jump_err label:error
+
+    copy REG_RES to REG_A
+    write 3 to REG_B
+    write " " to REG_C
+    write OP_GET_COLUMN to REG_OP
+    cpu_exec
+
+    copy REG_RES to REG_A
+    write "START_BLOCK" to REG_B
+    write OP_CMP_EQ to REG_OP
+    cpu_exec
+    jump_if_not label:error
+
+    // set var:start_block
+    copy var:diskName to REG_A
+    copy var:counter to REG_B
+    write OP_READ_BLOCK to REG_OP
+    cpu_exec
+    jump_err label:error
+
+    copy REG_RES to REG_A
+    write 4 to REG_B
+    write " " to REG_C
+    write OP_GET_COLUMN to REG_OP
+    cpu_exec
+
+    copy REG_RES to REG_A
+    write OP_IS_NUM to REG_OP
+    cpu_exec
+    jump_if_not label:data_error
+
+    copy REG_RES to var:start_block
+
+    //compare start_block with prev
+    copy var:previous_end_block to REG_A
+    copy var:start_block to REG_B
+    write OP_CMP_LT to REG_OP
+    cpu_exec
+    jump_if_not label:data_error
+
+    //END_BLOCK
+    copy var:diskName to REG_A
+    copy var:counter to REG_B
+    write OP_READ_BLOCK to REG_OP
+    cpu_exec
+    jump_err label:error
+
+    copy REG_RES to REG_A
+    write 5 to REG_B
+    write " " to REG_C
+    write OP_GET_COLUMN to REG_OP
+    cpu_exec
+
+    copy REG_RES to REG_A
+    write "END_BLOCK" to REG_B
+    write OP_CMP_EQ to REG_OP
+    cpu_exec
+    jump_if_not label:error
+
+    //set var:end_block
+    copy var:diskName to REG_A
+    copy var:counter to REG_B
+    write OP_READ_BLOCK to REG_OP
+    cpu_exec
+    jump_err label:error
+
+    copy REG_RES to REG_A
+    write 6 to REG_B
+    write " " to REG_C
+    write OP_GET_COLUMN to REG_OP
+    cpu_exec
+
+    copy REG_RES to REG_A
+    write OP_IS_NUM to REG_OP
+    cpu_exec
+    jump_if_not label:data_error
+
+    copy REG_RES to var:end_block
+
+    // compare start_block and end_block
+    copy var:start_block to REG_A
+    copy var:end_block to REG_B
+    write OP_CMP_LT to REG_OP
+    cpu_exec
+    jump_if_not label:data_error
+
+    // copy end to prev
+    copy var:end_block to var:previous_end_block
+
+    // save start and end blocks to *names_counter
+    copy *var:names_counter to REG_A
+    copy var:start_block to REG_B
+    write " " to REG_C
+    write OP_CONCAT_WITH to REG_OP
+    cpu_exec
+
+    copy REG_RES to REG_A
+    copy var:end_block to REG_B
+    write " " to REG_C
+    cpu_exec
+
+    copy REG_RES to *var:names_counter
+
+    // increment counter
+    copy var:counter to REG_A
+    write OP_INCR to REG_OP
+    cpu_exec
+    copy REG_RES to var:counter
+
+    //increment names_counter
+    copy var:names_counter to REG_A
+    write OP_INCR to REG_OP
+    cpu_exec
+
+    copy REG_RES to var:names_counter
+
+    jump label:partition_validation_loop
+
+label names_validatition
+    // decrement var:names_counter that it points to the last name
+    copy var:names_counter to REG_A
+    write OP_DECR to REG_OP
+    cpu_exec
+    copy REG_RES to var:names_counter
+
+    copy FREE_MEMORY_START to var:counter
+    cpu_exec
+
+    //parsing_names
+    label outer_loop
+        //check if outerCounter <= names_counter
+        copy var:outerCounter to REG_A
+        copy var:names_counter to REG_B
+        write OP_CMP_LE to REG_OP
+        cpu_exec
+
+        jump_if_not label:parsing_names_end
+
+        copy var:outerCounter to var:innerCounter
+        copy var:innerCounter to REG_A
+        write OP_INCR to REG_OP
+        cpu_exec
+
+        copy REG_RES to var:innerCounter
+        cpu_exec
+
+    label inner_loop
+        copy var:innerCounter to REG_A
+        copy var:names_counter to REG_B
+        write OP_CMP_LE to REG_OP
+        cpu_exec
+        jump_if_not label:advance_outer
+
+        copy *var:outerCounter to REG_A
+        copy *var:innerCounter to REG_B
+        write OP_CMP_EQ to REG_OP
+        cpu_exec
+
+        jump_if label:data_error
+
+        copy var:innerCounter to REG_A
+        write OP_INCR to REG_OP
+        cpu_exec
+
+        copy REG_RES to var:innerCounter
+
+        jump label:inner_loop
+
+    label advance_outer 
+        copy var:outerCounter to REG_A
+        write OP_INCR to REG_OP
+        cpu_exec
+
+        copy REG_RES to var:outerCounter
+
+        jump label:outer_loop
+    label parsing_names_end
+        write COLOR_GREEN to DISPLAY_COLOR
+        write "Names are valid!" to DISPLAY_BUFFER
+        write OP_DISPLAY to REG_OP
+        cpu_exec
+
+label partition_table_end_validatition
+    copy var:partition_counter to REG_A
+    write OP_INCR to REG_OP
+    cpu_exec
+
+    copy REG_RES to var:partition_counter
+    cpu_exec
+
+    //check if block 4 ends with END_PARTITION_TABLE
+    copy var:diskName to REG_A
+    copy var:partition_counter to REG_B
+    write OP_READ_BLOCK to REG_OP
+    cpu_exec
+    jump_err label:error
+
+    copy REG_RES to REG_A
+    write "END_PARTITION_TABLE" to REG_B
+    write OP_CONTAINS to REG_OP
+    cpu_exec
+    jump_if_not label:error
+    
+
+
+
+
+// Display prompt to enter the partition name:
+
+write COLOR_YELLOW to DISPLAY_COLOR
+write "Please enter a partition name: " to DISPLAY_BUFFER
+write OP_DISPLAY_LN to REG_OP
+cpu_exec
+
+// read disk name from keyboard
+write OP_READ_INPUT to REG_OP
+write KEYBOARD_READ_LINE to REG_A
+cpu_exec
+
+copy KEYBOARD_BUFFER to var:partition_name
+
+//check whether the var:partition_name exists 
+copy FREE_MEMORY_START to var:counter
+
+label user_partition_name_exists_loop
+    // check if counter <= names_counter
+    copy var:counter to REG_A
+    copy var:names_counter to REG_B
+    write OP_CMP_LE to REG_OP
+    cpu_exec
+    jump_if_not label:name_not_exists
+
+    copy *var:counter to REG_A
+    write 1 to REG_B
+    write " " to REG_C
+    write OP_GET_COLUMN to REG_OP
+    cpu_exec
+
+    //check if equal
+    copy var:partition_name to REG_A
+    copy REG_RES to REG_B
+    write OP_CMP_EQ to REG_OP
+    cpu_exec
+    jump_if label:partition_header_validatition
+
+    // increment counter
+    copy var:counter to REG_A
+    write OP_INCR to REG_OP
+    cpu_exec
+
+    copy REG_RES to var:counter 
+    jump label:user_partition_name_exists_loop
+
+label partition_header_validatition
+
+    // get start and end block of the partition
+    copy *var:counter to REG_A
+    write 2 to REG_B
+    write " " to REG_C
+    write OP_GET_COLUMN to REG_OP
+    cpu_exec
+
+    copy REG_RES to var:partition_start_block
+
+    copy *var:counter to REG_A
+    write 3 to REG_B
+    write " " to REG_C
+    write OP_GET_COLUMN to REG_OP
+    cpu_exec
+
+    copy REG_RES to var:partition_end_block
+
+    // get the first line of thr partition
+    copy var:diskName to REG_A
+    copy var:partition_start_block to REG_B
+    write OP_READ_BLOCK to REG_OP
+    cpu_exec
+
+    copy REG_RES to var:partition_first_line
+    jump_err label:error
+
+    // call the function to validate the file system of the partition
+    copy PROGRAM_COUNTER to var:sys_return
+    jump label:file_sys_validation
+
+    copy var:return_res to DISPLAY_BUFFER
+    write OP_DISPLAY_LN to REG_OP
+    cpu_exec
+
+jump label:kernel_exit
+
+label file_sys_validation
+    copy PROGRAM_COUNTER to var:sys_stack_return
+    jump label:sys_stack_push
+
+    // the first column should be FS_HEADER
+    copy var:partition_first_line to REG_A
+    write 1 to REG_B
+    write " " to REG_C
+    write OP_GET_COLUMN to REG_OP
+    cpu_exec
+
+    copy REG_RES to REG_A
+    write "FS_HEADER" to REG_B
+    write OP_CMP_EQ to REG_OP
+    cpu_exec
+    jump_if_not label:return_not_valid
+
+    // the second column should be kagu_fs
+    copy var:partition_first_line to REG_A
+    write 2 to REG_B
+    write " " to REG_C
+    write OP_GET_COLUMN to REG_OP
+    cpu_exec
+
+    copy REG_RES to REG_A
+    write "kagu_fs" to REG_B
+    write OP_CMP_EQ to REG_OP
+    cpu_exec
+    jump_if_not label:return_not_valid
+
+    // the third column should be FIRST_USABLE_BLOCK
+    copy var:partition_first_line to REG_A
+    write 3 to REG_B
+    write " " to REG_C
+    write OP_GET_COLUMN to REG_OP
+    cpu_exec
+
+    copy REG_RES to REG_A
+    write "FIRST_USABLE_BLOCK" to REG_B
+    write OP_CMP_EQ to REG_OP
+    cpu_exec
+    jump_if_not label:return_not_valid
+
+    // the fourth column should be a number and should belong to the range of the partition
+    copy var:partition_first_line to REG_A
+    write 4 to REG_B
+    write " " to REG_C
+    write OP_GET_COLUMN to REG_OP
+    cpu_exec
+
+    copy REG_RES to REG_A
+    write OP_IS_NUM to REG_OP
+    cpu_exec
+    jump_if_not label:return_not_valid
+
+    copy REG_RES to var:first_usable_block
+
+    copy var:partition_start_block to REG_A
+    copy var:first_usable_block to REG_B
+    write OP_CMP_LT to REG_OP
+    cpu_exec
+
+    jump_if_not label:return_not_valid
+
+    copy var:first_usable_block to REG_A
+    copy var:partition_end_block to REG_B
+    write OP_CMP_LE to REG_OP
+    cpu_exec
+
+    jump_if_not label:return_not_valid
+
+    // the fifth column should be LAST_USABLE_BLOCK
+    copy var:partition_first_line to REG_A
+    write 5 to REG_B
+    write " " to REG_C
+    write OP_GET_COLUMN to REG_OP
+    cpu_exec
+
+    copy REG_RES to REG_A
+    write "LAST_USABLE_BLOCK" to REG_B
+    write OP_CMP_EQ to REG_OP
+    cpu_exec
+    jump_if_not label:return_not_valid
+
+    // the last block should be a number and should belong to the range of the partition
+    copy var:partition_first_line to REG_A
+    write 6 to REG_B
+    write " " to REG_C
+    write OP_GET_COLUMN to REG_OP
+    cpu_exec
+
+    copy REG_RES to REG_A
+    write OP_IS_NUM to REG_OP
+    cpu_exec
+    jump_if_not label:return_not_valid
+
+    copy REG_RES to var:last_usable_block
+
+    copy var:first_usable_block to REG_A
+    copy var:last_usable_block to REG_B
+    write OP_CMP_LE to REG_OP
+    cpu_exec
+    jump_if_not label:return_not_valid
+
+    copy var:last_usable_block to REG_A
+    copy var:partition_end_block  to REG_B
+    cpu_exec
+    jump_if_not label:return_not_valid
+
+    // check if *(var:first_usable_block - 1) == FS_HEADER_END
+    copy var:first_usable_block to REG_A
+    write OP_DECR to REG_OP
+    cpu_exec
+
+    copy REG_RES to var:partition_counter
+
+    copy var:diskName to REG_A
+    copy REG_RES to REG_B
+    write OP_READ_BLOCK to REG_OP
+    cpu_exec
+    jump_err label:return_not_valid
+
+    copy REG_RES to REG_A
+    write "FS_HEADER_END" to REG_B
+    write OP_CMP_EQ to REG_OP
+    cpu_exec
+    jump_if_not label:return_not_valid
+
+    copy var:partition_counter to var:end_header_block_address
+
+    copy var:partition_start_block to REG_A
+    write OP_INCR to REG_OP
+    cpu_exec
+
+    copy REG_RES to var:header_counter
+    copy var:first_usable_block to var:block_prev
+    copy var:first_usable_block to var:block_start
+
+    label file_headers_validatition_loop
+        // check if header_counter < var:end_header_block_address
+        copy var:header_counter to REG_A
+        copy var:end_header_block_address to REG_B
+        write OP_CMP_LT to REG_OP
+        cpu_exec
+        jump_if_not label:file_headers_validatition_loop_end
+
+        //read the header
+        copy var:diskName to REG_A
+        copy var:header_counter to REG_B
+        write OP_READ_BLOCK to REG_OP
+        cpu_exec
+
+        copy REG_RES to var:file_header
+
+        // if header is empty - exit the loop
+        copy var:file_header to REG_A
+        write "" to REG_B
+        write OP_CMP_EQ to REG_OP
+        cpu_exec
+        jump_if label:file_headers_validatition_loop_end
+
+        // check if permissions are valid
+        copy var:file_header to REG_A
+        write 2 to REG_B
+        write " " to REG_C
+        write OP_GET_COLUMN to REG_OP
+        cpu_exec
+
+        write 0 to REG_A
+        copy REG_RES to REG_B
+        write OP_CMP_LE to REG_OP
+        cpu_exec
+        jump_if_not label:return_not_valid
+
+        copy REG_RES to REG_A
+        write 7 to REG_B
+        cpu_exec
+        jump_if_not label:return_not_valid
+
+        copy var:file_header to REG_A
+        write 3 to REG_B
+        write " " to REG_C
+        write OP_GET_COLUMN to REG_OP
+        cpu_exec
+
+        write 0 to REG_A
+        copy REG_RES to REG_B
+        write OP_CMP_LE to REG_OP
+        cpu_exec
+        jump_if_not label:return_not_valid
+
+        copy REG_RES to REG_A
+        write 7 to REG_B
+        cpu_exec
+        jump_if_not label:return_not_valid
+
+        copy var:file_header to REG_A
+        write 4 to REG_B
+        write " " to REG_C
+        write OP_GET_COLUMN to REG_OP
+        cpu_exec
+
+        write 0 to REG_A
+        copy REG_RES to REG_B
+        write OP_CMP_LE to REG_OP
+        cpu_exec
+        jump_if_not label:return_not_valid
+
+        copy REG_RES to REG_A
+        write 7 to REG_B
+        cpu_exec
+        jump_if_not label:return_not_valid
+
+        // check if column 7 is BLOCKS
+        copy var:file_header to REG_A
+        write 7 to REG_B
+        write " " to REG_C
+        write OP_GET_COLUMN to REG_OP
+        cpu_exec
+
+        copy REG_RES to REG_A 
+        write "BLOCKS" to REG_B
+        write OP_CMP_EQ to REG_OP
+        cpu_exec
+        jump_if_not label:return_not_valid
+
+        write 7 to var:column_counter
+        write 0 to var:counter
+        write 30 to var:block_prev
+
+        label blocks_loop
+            // Increment column number
+            copy var:column_counter to REG_A
+            write OP_INCR to REG_OP
+            cpu_exec
+
+            copy REG_RES to var:column_counter
+
+            // Get block on index column_counter
+            copy var:file_header to REG_A
+            copy var:column_counter to REG_B
+            write " " to REG_C
+            write OP_GET_COLUMN to REG_OP
+            cpu_exec
+
+            copy REG_RES to var:block_temp
+
+            //Compare if block is empty
+            copy var:block_temp to REG_A
+            write "" to REG_B
+            write OP_CMP_EQ to REG_OP
+            cpu_exec
+            jump_if_not label:continue
+
+            copy var:counter to REG_A
+            write 2 to REG_B
+            write OP_MOD to REG_OP
+            cpu_exec
+
+            copy REG_RES to REG_A
+            write 0 to REG_B
+            write OP_CMP_EQ to REG_OP
+            cpu_exec
+
+            jump_if_not label:return_not_valid
+
+            // if block is empty, that all blocks are parsed
+            copy var:header_counter to REG_A
+            write OP_INCR to REG_OP
+            cpu_exec
+            copy REG_RES to var:header_counter
+
+            jump_if label:file_headers_validatition_loop
+
+            label continue
+                // increment counter
+                copy var:counter to REG_A
+                write OP_INCR to REG_OP
+                cpu_exec
+                copy REG_RES to var:counter
+                cpu_exec
+            // check if it the first number of the block or not
+                copy var:counter to REG_A
+                write 2 to REG_B
+                write OP_MOD to REG_OP
+                cpu_exec
+
+                copy REG_RES to REG_A
+                write 1 to REG_B
+                write OP_CMP_EQ to REG_OP
+                cpu_exec
+                jump_if label:save_to_block_start
+
+                copy var:block_start to REG_A
+                copy var:block_temp to REG_B
+                write OP_CMP_LE to REG_OP
+                cpu_exec
+                jump_if_not label:return_not_valid
+
+                copy var:block_temp to var:block_prev
+
+                jump label:blocks_loop
+
+                label save_to_block_start
+                    copy var:block_temp to var:block_start
+
+                    copy var:block_prev to REG_A
+                    copy var:block_start to REG_B
+                    write OP_CMP_LE to REG_OP
+                    cpu_exec
+                    jump_if_not label:return_not_valid
+
+                    jump label:blocks_loop
+
+    label file_headers_validatition_loop_end
+        jump label:return_valid
+
+    label return_not_valid
+        write COLOR_RED to DISPLAY_COLOR
+        write "The file system is not valid!" to var:return_res
+        cpu_exec
+        jump label:sys_stack_pop
+    
+    label return_valid
+        write COLOR_GREEN to DISPLAY_COLOR
+        write "The file system is valid!" to var:return_res
+        cpu_exec
+        jump label:sys_stack_pop
+
+label error
+    copy REG_ERROR to DISPLAY_BUFFER
+    write COLOR_RED to DISPLAY_COLOR
+    write OP_DISPLAY_LN to REG_OP
+    cpu_exec
+
+label data_error
+    write "Invalid names or/and size" to DISPLAY_BUFFER
+    write COLOR_RED to DISPLAY_COLOR
+    write OP_DISPLAY_LN to REG_OP
+    cpu_exec
+
+label name_not_exists
+    write "No such partition name" to DISPLAY_BUFFER
+    write COLOR_RED to DISPLAY_COLOR
+    write OP_DISPLAY_LN to REG_OP
+    cpu_exec
+
+label kernel_exit
+    write OP_HALT to REG_OP
+    cpu_exec
